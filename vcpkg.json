@@ -1,0 +1,18 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "password-manager",
+  "version-string": "1.0.0",
+  "description": "Secure, local-first Password Manager application.",
+  "dependencies": [
+    "libsodium",
+    "nlohmann-json"
+  ],
+  "features": {
+    "tests": {
+      "description": "Dependencies required for building unit and integration tests.",
+      "dependencies": [
+        "gtest"
+      ]
+    }
+  }
+}

@@ -1,0 +1,111 @@
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+*.i*86
+*.x86_64
+*.hex
+
+# Debugging and symbols
+*.ilk
+*.pdb
+*.exp
+*.idb
+
+# CMake build outputs and caches
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+Testing/
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+build/
+build-*/
+out/
+bin/
+
+# vcpkg package manager artifacts
+vcpkg_installed/
+.vcpkg/
+
+# Visual Studio / MSVC artifacts
+.vs/
+*.sln.docstates
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.opensdf
+*.sdf
+*.VC.db
+*.VC.opendb
+ipch/
+[Dd]ebug/
+[Rr]elease/
+[Xx]64/
+[Xx]86/
+[Aa][Rr][Mm]*/
+
+# Visual Studio Code & JetBrains IDE caches
+.vscode/
+.idea/
+*.swp
+*~
+*.bak
+
+# Sensitive Vault & Security Data (Never commit vault databases, keys, or backups)
+*.vault
+*.vault.bak
+*.vault.tmp
+vault.dat
+vault.bin
+vault.json
+*.key
+*.keyring
+*.secret
+*.enc
+vault/
+vaults/
+secrets/
+
+# Local Environment and Configuration
+*.local
+.env
+*.env
+*.env.*
+
+# OS generated files
+Thumbs.db
+Desktop.ini
+.DS_Store
