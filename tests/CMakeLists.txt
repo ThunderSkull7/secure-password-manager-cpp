@@ -4,6 +4,10 @@ add_executable(password_manager_tests
     SmokeTest.cpp
     AppInfoTest.cpp
     BannerTest.cpp
+    CredentialTests.cpp
+    CredentialValidatorTests.cpp
+    TimestampTests.cpp
+    VaultTests.cpp
 )
 
 target_link_libraries(password_manager_tests

@@ -43,6 +43,10 @@ endif()
 # -----------------------------------------------------------------------------
 add_library(password_manager_lib STATIC
     src/ui/Banner.cpp
+    src/models/Credential.cpp
+    src/core/Timestamp.cpp
+    src/core/CredentialValidator.cpp
+    src/core/Vault.cpp
 )
 
 target_include_directories(password_manager_lib
