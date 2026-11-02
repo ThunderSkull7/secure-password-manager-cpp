@@ -8,6 +8,7 @@ add_executable(password_manager_tests
     CredentialValidatorTests.cpp
     TimestampTests.cpp
     VaultTests.cpp
+    PasswordGeneratorTests.cpp
 )
 
 target_link_libraries(password_manager_tests

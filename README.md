@@ -6,7 +6,7 @@ A modern, security-conscious C++20 local password manager vault application desi
 
 ## 1. Project Description
 
-Secure Password Manager is designed to provide secure, authenticated, and encrypted local storage for credentials, secrets, and sensitive notes. All cryptographic operations will run locally on the client machine using industry-standard primitives (libsodium), without third-party cloud dependencies or unencrypted persistence.
+Secure Password Manager is designed to provide secure, authenticated, and encrypted local storage for credentials, secrets, and sensitive notes. All cryptographic operations run locally on the client machine using industry-standard primitives (libsodium), without third-party cloud dependencies or unencrypted persistence.
 
 ---
 
@@ -26,7 +26,18 @@ Secure Password Manager is designed to provide secure, authenticated, and encryp
 > - Substring case-insensitive multi-field search (passwords are strictly excluded).
 > - Case-insensitive duplicate detection warning system (supports multiple accounts per service).
 > - Testable UTC ISO 8601 timestamp generator (`Timestamp` with pluggable `IClock`).
-> - **Note on Current Limitations:** Credentials currently reside strictly in memory. Disk persistence, encryption, password generation, and master-password authentication are scheduled for subsequent batches.
+>
+> **Batch 3: Cryptographically Secure Password Generator Complete**
+> - Standalone `PasswordGenerator` powered by libsodium (`randombytes_uniform`).
+> - Unbiased bounded random selection (no modulo reduction, no pseudo-random engines).
+> - Fisher-Yates unbiased shuffle algorithm using libsodium randomness.
+> - Guaranteed category representation (at least one character from each enabled category).
+> - Configurable character categories (Uppercase, Lowercase, Digits, Symbols).
+> - Optional ambiguous characters exclusion (`I`, `O`, `l`, `0`, `1`).
+> - Validation rules enforcing lengths between 8 and 256 characters.
+> - Secure temporary memory clearing via `sodium_memzero`.
+>
+> **Note on Current Limitations:** Credentials currently reside strictly in memory. Disk persistence, authenticated vault encryption, and master-password authentication are scheduled for subsequent batches.
 
 ---
 
@@ -38,7 +49,7 @@ Secure Password Manager is designed to provide secure, authenticated, and encryp
 | Primary Compiler | Microsoft Visual C++ (MSVC) | VS 2022 (MSVC v143+ / 19.44+) |
 | Build System | CMake | 3.20+ |
 | Dependency Manager | vcpkg | Manifest Mode (`vcpkg.json`) |
-| Cryptography | libsodium | 1.0.22 (staged in manifest) |
+| Cryptography | libsodium | 1.0.22 (used for randombytes and zeroization) |
 | Serialization | nlohmann/json | 3.12.0 (staged in manifest) |
 | Testing Framework | GoogleTest | 1.18.0 (discovered via CTest) |
 | Formatting | clang-format | LLVM / Google Style |
@@ -71,7 +82,35 @@ Secure Password Manager is designed to provide secure, authenticated, and encryp
 
 ---
 
-## 5. Prerequisites
+## 5. Cryptographically Secure Password Generator
+
+The `PasswordGenerator` component creates strong random passwords according to configurable policies:
+
+### Character Categories
+- **Uppercase**: `ABCDEFGHIJKLMNOPQRSTUVWXYZ` (26 characters)
+- **Lowercase**: `abcdefghijklmnopqrstuvwxyz` (26 characters)
+- **Digits**: `0123456789` (10 characters)
+- **Symbols**: `!@#$%^&*()-_=+[]{};:,.?/` (24 characters)
+- **Ambiguous Characters (Optional Exclusion)**: `I`, `O`, `l`, `0`, `1`
+
+### Configuration Options (`PasswordGeneratorConfig`)
+- `length`: Password length between 8 and 256 characters (default: 16).
+- `include_uppercase`: Enable/disable uppercase characters (default: `true`).
+- `include_lowercase`: Enable/disable lowercase characters (default: `true`).
+- `include_digits`: Enable/disable numeric characters (default: `true`).
+- `include_symbols`: Enable/disable punctuation/symbol characters (default: `true`).
+- `exclude_ambiguous`: Filter out easily confused characters (default: `false`).
+
+### Generation Algorithm & Guarantees
+1. **Entropy Source**: libsodium (`randombytes_uniform`) provides unbiased, bounded cryptographically secure random integers. Modulo reduction is strictly avoided.
+2. **Category Representation Guarantee**: Exactly 1 character is randomly drawn from each enabled category pool, ensuring 100% representation.
+3. **Pool Filling**: The remaining positions up to `length` are randomly drawn from the combined pool of all enabled categories.
+4. **Fisher-Yates Shuffle**: The full character sequence is shuffled in-place using `randombytes_uniform` bounds, destroying any positional bias from the initial category draws.
+5. **Memory Zeroing**: Intermediate character arrays are immediately wiped using `sodium_memzero` before returning.
+
+---
+
+## 6. Prerequisites
 
 To build and run this project on Windows:
 
@@ -83,7 +122,7 @@ To build and run this project on Windows:
 
 ---
 
-## 6. Build Instructions (PowerShell)
+## 7. Build Instructions (PowerShell)
 
 ### Method A: Using CMake Presets (Recommended)
 
@@ -113,15 +152,15 @@ cmake --build --preset release
 
 ---
 
-## 7. Running Tests
+## 8. Running Tests
 
 ### Method A: Using CTest Presets
 
 ```powershell
-# Run Debug tests (33 unit tests)
+# Run Debug tests (47 unit tests)
 ctest --preset debug-test
 
-# Run Release tests (33 unit tests)
+# Run Release tests (47 unit tests)
 ctest --preset release-test
 ```
 
@@ -134,7 +173,7 @@ ctest --preset release-test
 
 ---
 
-## 8. Project Directory Structure
+## 9. Project Directory Structure
 
 ```text
 Password Manager/
@@ -153,6 +192,8 @@ Password Manager/
 │   ├── core/                   # Core business logic and engine
 │   │   ├── AppInfo.hpp         # Version and build configuration metadata
 │   │   ├── CredentialValidator.hpp # Input normalization & validation rules
+│   │   ├── PasswordGenerator.hpp   # Cryptographically secure password generator
+│   │   ├── PasswordGeneratorConfig.hpp # Generator policy configuration
 │   │   ├── Result.hpp          # Value-or-error functional return type
 │   │   ├── Timestamp.hpp       # Testable UTC ISO 8601 timestamp generator
 │   │   ├── Vault.hpp           # In-memory Vault management class
@@ -166,6 +207,7 @@ Password Manager/
 │   │   └── Credential.cpp      # Credential constructor & update logic
 │   ├── core/                   # Core engine implementations
 │   │   ├── CredentialValidator.cpp # Syntax & boundary validators
+│   │   ├── PasswordGenerator.cpp   # libsodium random generator & Fisher-Yates
 │   │   ├── Timestamp.cpp       # UTC ISO 8601 formatting implementation
 │   │   └── Vault.cpp           # Vault in-memory CRUD, search, duplicate detection
 │   └── ui/                     # UI implementations
@@ -177,6 +219,7 @@ Password Manager/
 │   ├── BannerTest.cpp          # UI banner output verification test
 │   ├── CredentialTests.cpp     # Credential model & update tests
 │   ├── CredentialValidatorTests.cpp # Validation & boundary tests
+│   ├── PasswordGeneratorTests.cpp  # Password generator category & security tests
 │   ├── SmokeTest.cpp           # Basic framework sanity test
 │   ├── TimestampTests.cpp      # ISO 8601 UTC format & clock tests
 │   └── VaultTests.cpp          # Full Vault operations, search, duplicate tests
@@ -188,23 +231,23 @@ Password Manager/
 
 ---
 
-## 9. Security Considerations & In-Memory Limitations
+## 10. Security Considerations & In-Memory Limitations
 
-- **No Encryption Yet:** This batch establishes the in-memory domain model. Data is stored in memory as plaintext strings.
-- **Memory Zeroization:** Standard `std::string` does not guarantee secure zeroing on destruction. Secure memory wiping primitives (`sodium_memzero`) and guarded memory allocations will be implemented in future security hardening batches.
-- **No Password Exposure:** Stored passwords are never searched by `search_credentials`, never logged, and never formatted in diagnostic messages.
-- **Atomic Operations:** Validation failures leave stored credentials completely untouched.
-
----
-
-## 10. Planned Functionality (Upcoming Batches)
-
-- **Batch 3: Cryptographic Engine**: Key derivation via Argon2id (`crypto_pwhash`), symmetric authenticated encryption via XChaCha20-Poly1305.
-- **Batch 4: Vault Storage & Serialization**: Encrypted JSON persistence, atomic file writing, safe backups.
-- **Batch 5: CLI & Interactive User Workflows**: Master password setup, unlock, record search, add, edit, and clipboard integration.
+- **No Encryption Yet:** This batch implements in-memory vault logic and the standalone password generator. Data is not yet encrypted or persisted to disk.
+- **Memory Zeroization:** Intermediate buffers inside `PasswordGenerator` are cleared via `sodium_memzero`. However, returned `std::string` objects do not guarantee secure zeroing on destruction. Secure string wrappers will be introduced during subsequent security hardening batches.
+- **No Password Exposure:** Stored and generated passwords are never logged, never printed automatically, and never searched.
+- **Randomness Integrity:** Random generation exclusively relies on libsodium OS-level cryptographic entropy. Weak or predictable PRNGs (`rand()`, `mt19937`) are never used.
 
 ---
 
-## 11. License
+## 11. Planned Functionality (Upcoming Batches)
+
+- **Batch 4: Cryptographic Engine**: Key derivation via Argon2id (`crypto_pwhash`), symmetric authenticated encryption via XChaCha20-Poly1305.
+- **Batch 5: Vault Storage & Serialization**: Encrypted JSON persistence, atomic file writing, safe backups.
+- **Batch 6: CLI & Interactive User Workflows**: Master password setup, unlock, record search, add, edit, and clipboard integration.
+
+---
+
+## 12. License
 
 This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.

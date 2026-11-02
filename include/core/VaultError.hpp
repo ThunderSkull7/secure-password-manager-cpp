@@ -4,7 +4,13 @@
 
 namespace password_manager::core {
 
-enum class VaultErrorCode { NotFound, ValidationError, IdExhaustion };
+enum class VaultErrorCode {
+    NotFound,
+    ValidationError,
+    IdExhaustion,
+    InitializationError,
+    InvalidConfiguration
+};
 
 struct VaultError {
     VaultErrorCode code;

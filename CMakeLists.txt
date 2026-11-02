@@ -47,6 +47,7 @@ add_library(password_manager_lib STATIC
     src/core/Timestamp.cpp
     src/core/CredentialValidator.cpp
     src/core/Vault.cpp
+    src/core/PasswordGenerator.cpp
 )
 
 target_include_directories(password_manager_lib
