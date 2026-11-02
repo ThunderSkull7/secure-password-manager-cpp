@@ -48,6 +48,10 @@ add_library(password_manager_lib STATIC
     src/core/CredentialValidator.cpp
     src/core/Vault.cpp
     src/core/PasswordGenerator.cpp
+    src/core/SodiumInitializer.cpp
+    src/core/SecureKey.cpp
+    src/core/SecureBuffer.cpp
+    src/core/CryptoService.cpp
 )
 
 target_include_directories(password_manager_lib

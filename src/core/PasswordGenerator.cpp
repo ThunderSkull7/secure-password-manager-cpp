@@ -7,14 +7,11 @@
 #include <utility>
 #include <vector>
 
+#include "core/SodiumInitializer.hpp"
+
 namespace password_manager::core {
 
 namespace {
-
-bool ensure_sodium_initialized() {
-    static const bool initialized = (sodium_init() >= 0);
-    return initialized;
-}
 
 bool is_ambiguous(char ch) noexcept {
     return PasswordGenerator::AMBIGUOUS_CHARS.find(ch) != std::string_view::npos;
@@ -68,10 +65,9 @@ Result<void> PasswordGenerator::validate_config(const PasswordGeneratorConfig& c
 }
 
 Result<std::string> PasswordGenerator::generate(const PasswordGeneratorConfig& config) const {
-    if (!ensure_sodium_initialized()) {
-        return Result<std::string>::failure(
-            VaultErrorCode::InitializationError,
-            "Failed to initialize cryptographic random generator (libsodium).");
+    const auto init_res = SodiumInitializer::initialize();
+    if (!init_res.has_value()) {
+        return Result<std::string>::failure(init_res.error().code, init_res.error().message);
     }
 
     const auto validation = validate_config(config);

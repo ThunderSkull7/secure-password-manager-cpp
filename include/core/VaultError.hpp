@@ -9,7 +9,18 @@ enum class VaultErrorCode {
     ValidationError,
     IdExhaustion,
     InitializationError,
-    InvalidConfiguration
+    InvalidConfiguration,
+    InvalidKey,
+    InvalidSalt,
+    InvalidKdfParameters,
+    KeyDerivationFailed,
+    EncryptionFailed,
+    DecryptionFailed,
+    AuthenticationFailed,
+    InvalidNonce,
+    InvalidCiphertext,
+    PayloadTooLarge,
+    AllocationFailed
 };
 
 struct VaultError {

@@ -37,7 +37,18 @@ Secure Password Manager is designed to provide secure, authenticated, and encryp
 > - Validation rules enforcing lengths between 8 and 256 characters.
 > - Secure temporary memory clearing via `sodium_memzero`.
 >
-> **Note on Current Limitations:** Credentials currently reside strictly in memory. Disk persistence, authenticated vault encryption, and master-password authentication are scheduled for subsequent batches.
+> **Batch 4: Cryptographic Security Layer Complete**
+> - Centralized, thread-safe libsodium initialization via `SodiumInitializer`.
+> - 256-bit key derivation from master password using Argon2id v1.3 (`crypto_pwhash_ALG_ARGON2ID13`).
+> - 16-byte cryptographically secure random salt generation (`randombytes_buf`).
+> - Authenticated encryption and decryption using XChaCha20-Poly1305-IETF.
+> - Fresh 24-byte random nonce generation per encryption operation.
+> - Additional Authenticated Data (AAD) integrity binding.
+> - Move-only RAII `SecureKey` with zeroization upon destruction (`sodium_memzero`).
+> - Move-only guard-page protected `SecureBuffer` with `sodium_malloc` and `sodium_free`.
+> - Comprehensive automated security testing (80 total tests across Debug and Release).
+>
+> **Note on Current Limitations:** This batch establishes the cryptographic engine. Complete encrypted file-based vault persistence and interactive CLI workflows are scheduled for subsequent batches.
 
 ---
 
@@ -49,7 +60,7 @@ Secure Password Manager is designed to provide secure, authenticated, and encryp
 | Primary Compiler | Microsoft Visual C++ (MSVC) | VS 2022 (MSVC v143+ / 19.44+) |
 | Build System | CMake | 3.20+ |
 | Dependency Manager | vcpkg | Manifest Mode (`vcpkg.json`) |
-| Cryptography | libsodium | 1.0.22 (used for randombytes and zeroization) |
+| Cryptography | libsodium | 1.0.22 (Argon2id, XChaCha20-Poly1305, CSPRNG, guarded memory) |
 | Serialization | nlohmann/json | 3.12.0 (staged in manifest) |
 | Testing Framework | GoogleTest | 1.18.0 (discovered via CTest) |
 | Formatting | clang-format | LLVM / Google Style |
@@ -101,16 +112,24 @@ The `PasswordGenerator` component creates strong random passwords according to c
 - `include_symbols`: Enable/disable punctuation/symbol characters (default: `true`).
 - `exclude_ambiguous`: Filter out easily confused characters (default: `false`).
 
-### Generation Algorithm & Guarantees
-1. **Entropy Source**: libsodium (`randombytes_uniform`) provides unbiased, bounded cryptographically secure random integers. Modulo reduction is strictly avoided.
-2. **Category Representation Guarantee**: Exactly 1 character is randomly drawn from each enabled category pool, ensuring 100% representation.
-3. **Pool Filling**: The remaining positions up to `length` are randomly drawn from the combined pool of all enabled categories.
-4. **Fisher-Yates Shuffle**: The full character sequence is shuffled in-place using `randombytes_uniform` bounds, destroying any positional bias from the initial category draws.
-5. **Memory Zeroing**: Intermediate character arrays are immediately wiped using `sodium_memzero` before returning.
+---
+
+## 6. Cryptographic Security Layer
+
+Detailed architecture and threat model are documented in [docs/SECURITY.md](docs/SECURITY.md).
+
+### Cryptographic Standards
+- **Key Derivation**: Argon2id v1.3 (`crypto_pwhash_ALG_ARGON2ID13`) with 16-byte random salt, deriving 256-bit encryption keys. Default interactive baseline: `ops_limit = 2`, `mem_limit = 64 MiB`.
+- **Authenticated Encryption**: XChaCha20-Poly1305-IETF (`crypto_aead_xchacha20poly1305_ietf_*`) with fresh 24-byte (192-bit) random nonces generated per encryption.
+- **Integrity Verification**: Poly1305 16-byte authentication tag verified prior to releasing any decrypted data.
+- **Additional Authenticated Data (AAD)**: Plaintext metadata (version, salt, parameters) is authenticated alongside ciphertext.
+- **Memory Protection**:
+  - `SecureKey`: Move-only key container zeroed via `sodium_memzero` on destruction.
+  - `SecureBuffer`: Move-only buffer allocated via `sodium_malloc` (with guard pages and canaries) and wiped via `sodium_free`.
 
 ---
 
-## 6. Prerequisites
+## 7. Prerequisites
 
 To build and run this project on Windows:
 
@@ -122,7 +141,7 @@ To build and run this project on Windows:
 
 ---
 
-## 7. Build Instructions (PowerShell)
+## 8. Build Instructions (PowerShell)
 
 ### Method A: Using CMake Presets (Recommended)
 
@@ -152,15 +171,15 @@ cmake --build --preset release
 
 ---
 
-## 8. Running Tests
+## 9. Running Tests
 
 ### Method A: Using CTest Presets
 
 ```powershell
-# Run Debug tests (47 unit tests)
+# Run Debug tests (80 unit tests)
 ctest --preset debug-test
 
-# Run Release tests (47 unit tests)
+# Run Release tests (80 unit tests)
 ctest --preset release-test
 ```
 
@@ -173,7 +192,7 @@ ctest --preset release-test
 
 ---
 
-## 9. Project Directory Structure
+## 10. Project Directory Structure
 
 ```text
 Password Manager/
@@ -186,15 +205,24 @@ Password Manager/
 ├── README.md                   # Project documentation and developer guide
 ├── LICENSE                     # MIT License
 │
+├── docs/                       # Architectural & design documentation
+│   └── SECURITY.md             # Cryptographic architecture and threat model
+│
 ├── include/                    # Public headers
 │   ├── models/                 # Domain and data models
 │   │   └── Credential.hpp      # Credential model & CredentialInput structure
 │   ├── core/                   # Core business logic and engine
 │   │   ├── AppInfo.hpp         # Version and build configuration metadata
 │   │   ├── CredentialValidator.hpp # Input normalization & validation rules
+│   │   ├── CryptoParameters.hpp    # Cryptographic constants & KDF parameter structures
+│   │   ├── CryptoService.hpp       # Argon2id KDF and XChaCha20-Poly1305 service
+│   │   ├── EncryptedMessage.hpp    # Encrypted payload structure (nonce + ciphertext)
 │   │   ├── PasswordGenerator.hpp   # Cryptographically secure password generator
 │   │   ├── PasswordGeneratorConfig.hpp # Generator policy configuration
 │   │   ├── Result.hpp          # Value-or-error functional return type
+│   │   ├── SecureBuffer.hpp    # Guard-page protected plaintext memory buffer
+│   │   ├── SecureKey.hpp       # Move-only zeroized 256-bit encryption key
+│   │   ├── SodiumInitializer.hpp   # Centralized, thread-safe libsodium initialization
 │   │   ├── Timestamp.hpp       # Testable UTC ISO 8601 timestamp generator
 │   │   ├── Vault.hpp           # In-memory Vault management class
 │   │   └── VaultError.hpp      # Strongly typed vault error representations
@@ -207,11 +235,15 @@ Password Manager/
 │   │   └── Credential.cpp      # Credential constructor & update logic
 │   ├── core/                   # Core engine implementations
 │   │   ├── CredentialValidator.cpp # Syntax & boundary validators
+│   │   ├── CryptoService.cpp       # Argon2id derivation & authenticated encryption
 │   │   ├── PasswordGenerator.cpp   # libsodium random generator & Fisher-Yates
-│   │   ├── Timestamp.cpp       # UTC ISO 8601 formatting implementation
-│   │   └── Vault.cpp           # Vault in-memory CRUD, search, duplicate detection
+│   │   ├── SecureBuffer.cpp        # sodium_malloc / sodium_free buffer implementation
+│   │   ├── SecureKey.cpp           # Key zeroization and move semantics
+│   │   ├── SodiumInitializer.cpp   # Thread-safe sodium_init wrapper
+│   │   ├── Timestamp.cpp           # UTC ISO 8601 formatting implementation
+│   │   └── Vault.cpp               # Vault in-memory CRUD, search, duplicate detection
 │   └── ui/                     # UI implementations
-│       └── Banner.cpp          # Banner stream rendering
+│       └── Banner.cpp              # Banner stream rendering
 │
 ├── tests/                      # Automated test suite (GoogleTest)
 │   ├── CMakeLists.txt          # Test build configuration & CTest discovery
@@ -219,35 +251,35 @@ Password Manager/
 │   ├── BannerTest.cpp          # UI banner output verification test
 │   ├── CredentialTests.cpp     # Credential model & update tests
 │   ├── CredentialValidatorTests.cpp # Validation & boundary tests
+│   ├── CryptoServiceTests.cpp  # KDF, encryption, decryption, and AAD tests
 │   ├── PasswordGeneratorTests.cpp  # Password generator category & security tests
+│   ├── SecureBufferTests.cpp   # Guarded memory allocation & move tests
+│   ├── SecureKeyTests.cpp      # Key move-only semantics & zeroization tests
 │   ├── SmokeTest.cpp           # Basic framework sanity test
 │   ├── TimestampTests.cpp      # ISO 8601 UTC format & clock tests
 │   └── VaultTests.cpp          # Full Vault operations, search, duplicate tests
-│
-├── docs/                       # Architectural & design documentation
 │
 └── assets/                     # Application assets and resources
 ```
 
 ---
 
-## 10. Security Considerations & In-Memory Limitations
+## 11. Security Considerations & In-Memory Limitations
 
-- **No Encryption Yet:** This batch implements in-memory vault logic and the standalone password generator. Data is not yet encrypted or persisted to disk.
-- **Memory Zeroization:** Intermediate buffers inside `PasswordGenerator` are cleared via `sodium_memzero`. However, returned `std::string` objects do not guarantee secure zeroing on destruction. Secure string wrappers will be introduced during subsequent security hardening batches.
-- **No Password Exposure:** Stored and generated passwords are never logged, never printed automatically, and never searched.
+- **No Encryption Yet:** This batch implements cryptographic primitives and in-memory vault logic. Complete encrypted file-based vault persistence will be introduced in Batch 5.
+- **Memory Zeroization:** Sensitive keys (`SecureKey`) and decrypted payloads (`SecureBuffer`) use libsodium memory protection (`sodium_memzero`, `sodium_malloc`, `sodium_free`). Plaintext credentials inside the domain model (`std::string`) will be wrapped in protected storage in the vault persistence batch.
+- **No Password Exposure:** Stored and generated passwords, master passwords, and secret keys are never logged, never printed automatically, and never searched.
 - **Randomness Integrity:** Random generation exclusively relies on libsodium OS-level cryptographic entropy. Weak or predictable PRNGs (`rand()`, `mt19937`) are never used.
 
 ---
 
-## 11. Planned Functionality (Upcoming Batches)
+## 12. Planned Functionality (Upcoming Batches)
 
-- **Batch 4: Cryptographic Engine**: Key derivation via Argon2id (`crypto_pwhash`), symmetric authenticated encryption via XChaCha20-Poly1305.
-- **Batch 5: Vault Storage & Serialization**: Encrypted JSON persistence, atomic file writing, safe backups.
+- **Batch 5: Vault Storage & Serialization**: Encrypted JSON persistence, atomic file writing, safe backups, authenticated vault file format.
 - **Batch 6: CLI & Interactive User Workflows**: Master password setup, unlock, record search, add, edit, and clipboard integration.
 
 ---
 
-## 12. License
+## 13. License
 
 This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.

@@ -18,11 +18,11 @@ class Result {
 
   public:
     Result(const StorageType& value)
-        requires(!std::is_void_v<T>)
+        requires(!std::is_void_v<T> && std::is_copy_constructible_v<StorageType>)
         : state_(value) {}
 
     Result(StorageType&& value)
-        requires(!std::is_void_v<T>)
+        requires(!std::is_void_v<T> && std::is_move_constructible_v<StorageType>)
         : state_(std::move(value)) {}
 
     Result()
@@ -33,15 +33,22 @@ class Result {
 
     Result(VaultError&& error) : state_(std::move(error)) {}
 
+    Result(const Result&) = default;
+    Result& operator=(const Result&) = default;
+    Result(Result&&) noexcept = default;
+    Result& operator=(Result&&) noexcept = default;
+
     [[nodiscard]] bool has_value() const noexcept {
         return std::holds_alternative<StorageType>(state_);
     }
 
     [[nodiscard]] explicit operator bool() const noexcept { return has_value(); }
 
-    [[nodiscard]] const StorageType& value() const { return std::get<StorageType>(state_); }
+    [[nodiscard]] const StorageType& value() const& { return std::get<StorageType>(state_); }
 
-    [[nodiscard]] StorageType& value() { return std::get<StorageType>(state_); }
+    [[nodiscard]] StorageType& value() & { return std::get<StorageType>(state_); }
+
+    [[nodiscard]] StorageType&& value() && { return std::get<StorageType>(std::move(state_)); }
 
     [[nodiscard]] const VaultError& error() const { return std::get<VaultError>(state_); }
 
