@@ -52,6 +52,8 @@ add_library(password_manager_lib STATIC
     src/core/SecureKey.cpp
     src/core/SecureBuffer.cpp
     src/core/CryptoService.cpp
+    src/core/VaultSerializer.cpp
+    src/core/VaultStorage.cpp
 )
 
 target_include_directories(password_manager_lib

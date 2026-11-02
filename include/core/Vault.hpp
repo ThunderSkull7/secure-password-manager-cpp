@@ -18,6 +18,17 @@ class Vault {
 
     explicit Vault(std::shared_ptr<IClock> clock = std::make_shared<SystemClock>());
 
+    /**
+     * @brief Constructs a Vault from an existing set of validated credentials.
+     * Validates that credential IDs are unique and positive, and sets next_id_ accordingly.
+     * @param credentials Vector of credentials to populate the vault with.
+     * @param clock Clock implementation to use for future modifications.
+     * @return Initialized Vault or failure if IDs are duplicated or invalid.
+     */
+    static Result<Vault> from_credentials(
+        std::vector<models::Credential> credentials,
+        std::shared_ptr<IClock> clock = std::make_shared<SystemClock>());
+
     // Core Vault Operations
     Result<models::CredentialId> add_credential(const models::CredentialInput& input);
 

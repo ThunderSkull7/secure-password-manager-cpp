@@ -12,6 +12,7 @@ add_executable(password_manager_tests
     SecureKeyTests.cpp
     SecureBufferTests.cpp
     CryptoServiceTests.cpp
+    VaultStorageTests.cpp
 )
 
 target_link_libraries(password_manager_tests

@@ -6,7 +6,7 @@ A modern, security-conscious C++20 local password manager vault application desi
 
 ## 1. Project Description
 
-Secure Password Manager is designed to provide secure, authenticated, and encrypted local storage for credentials, secrets, and sensitive notes. All cryptographic operations run locally on the client machine using industry-standard primitives (libsodium), without third-party cloud dependencies or unencrypted persistence.
+Secure Password Manager provides secure, authenticated, and encrypted local storage for credentials, secrets, and sensitive notes. All cryptographic operations run locally on the client machine using industry-standard primitives (libsodium), without third-party cloud dependencies or unencrypted persistence.
 
 ---
 
@@ -46,9 +46,15 @@ Secure Password Manager is designed to provide secure, authenticated, and encryp
 > - Additional Authenticated Data (AAD) integrity binding.
 > - Move-only RAII `SecureKey` with zeroization upon destruction (`sodium_memzero`).
 > - Move-only guard-page protected `SecureBuffer` with `sodium_malloc` and `sodium_free`.
-> - Comprehensive automated security testing (80 total tests across Debug and Release).
 >
-> **Note on Current Limitations:** This batch establishes the cryptographic engine. Complete encrypted file-based vault persistence and interactive CLI workflows are scheduled for subsequent batches.
+> **Batch 5: Versioned Encrypted Vault Format & Atomic Persistence Complete**
+> - Versioned binary vault format (`SPMV`) with explicit little-endian multi-byte integers.
+> - 80-byte binary header with 48-byte Additional Authenticated Data (AAD) binding.
+> - Pre-derivation KDF resource validation guarding against memory and CPU DoS attacks.
+> - Sensitive JSON serialization and deserialization within `SecureBuffer`.
+> - Robust atomic file persistence on Windows (`ReplaceFileW`, `MoveFileExW`, `FlushFileBuffers`).
+> - Tamper resistance and corruption detection (truncated files, bit-flips, trailing bytes rejected).
+> - Comprehensive test suite (108 total tests passing in Debug and Release).
 
 ---
 
@@ -61,7 +67,7 @@ Secure Password Manager is designed to provide secure, authenticated, and encryp
 | Build System | CMake | 3.20+ |
 | Dependency Manager | vcpkg | Manifest Mode (`vcpkg.json`) |
 | Cryptography | libsodium | 1.0.22 (Argon2id, XChaCha20-Poly1305, CSPRNG, guarded memory) |
-| Serialization | nlohmann/json | 3.12.0 (staged in manifest) |
+| Serialization | nlohmann/json | 3.12.0 (Structured serialization inside `SecureBuffer`) |
 | Testing Framework | GoogleTest | 1.18.0 (discovered via CTest) |
 | Formatting | clang-format | LLVM / Google Style |
 
@@ -82,117 +88,73 @@ Secure Password Manager is designed to provide secure, authenticated, and encryp
 | `created_at` | `string` | Creation timestamp | UTC ISO 8601 (`YYYY-MM-DDTHH:MM:SSZ`); immutable |
 | `updated_at` | `string` | Last modified timestamp | UTC ISO 8601 (`YYYY-MM-DDTHH:MM:SSZ`); updated on edit |
 
-### Vault Operations
-- **Add**: Validates input, assigns next monotonic ID, sets timestamps, stores record.
-- **Retrieve**: Retrieves credential by ID; returns `NotFound` if non-existent.
-- **Update**: Atomically validates and updates record fields; preserves ID and creation timestamp.
-- **Delete**: Removes credential by ID; ID is never reused for future entries.
-- **List**: Returns all credentials sorted deterministically by ID.
-- **Search**: Case-insensitive substring search across service, username, URL, category, and notes. Password fields are strictly excluded from search queries. Empty query returns an empty collection.
-- **Duplicate Detection**: Non-blocking warning detection comparing service and username case-insensitively.
-
 ---
 
-## 5. Cryptographically Secure Password Generator
+## 5. Binary Vault Format (`SPMV`) & Storage Architecture
 
-The `PasswordGenerator` component creates strong random passwords according to configurable policies:
+Vault persistence is managed by `VaultStorage`, `VaultSerializer`, and `VaultFileFormat`:
 
-### Character Categories
-- **Uppercase**: `ABCDEFGHIJKLMNOPQRSTUVWXYZ` (26 characters)
-- **Lowercase**: `abcdefghijklmnopqrstuvwxyz` (26 characters)
-- **Digits**: `0123456789` (10 characters)
-- **Symbols**: `!@#$%^&*()-_=+[]{};:,.?/` (24 characters)
-- **Ambiguous Characters (Optional Exclusion)**: `I`, `O`, `l`, `0`, `1`
-
-### Configuration Options (`PasswordGeneratorConfig`)
-- `length`: Password length between 8 and 256 characters (default: 16).
-- `include_uppercase`: Enable/disable uppercase characters (default: `true`).
-- `include_lowercase`: Enable/disable lowercase characters (default: `true`).
-- `include_digits`: Enable/disable numeric characters (default: `true`).
-- `include_symbols`: Enable/disable punctuation/symbol characters (default: `true`).
-- `exclude_ambiguous`: Filter out easily confused characters (default: `false`).
-
----
-
-## 6. Cryptographic Security Layer
-
-Detailed architecture and threat model are documented in [docs/SECURITY.md](docs/SECURITY.md).
-
-### Cryptographic Standards
-- **Key Derivation**: Argon2id v1.3 (`crypto_pwhash_ALG_ARGON2ID13`) with 16-byte random salt, deriving 256-bit encryption keys. Default interactive baseline: `ops_limit = 2`, `mem_limit = 64 MiB`.
-- **Authenticated Encryption**: XChaCha20-Poly1305-IETF (`crypto_aead_xchacha20poly1305_ietf_*`) with fresh 24-byte (192-bit) random nonces generated per encryption.
-- **Integrity Verification**: Poly1305 16-byte authentication tag verified prior to releasing any decrypted data.
-- **Additional Authenticated Data (AAD)**: Plaintext metadata (version, salt, parameters) is authenticated alongside ciphertext.
-- **Memory Protection**:
-  - `SecureKey`: Move-only key container zeroed via `sodium_memzero` on destruction.
-  - `SecureBuffer`: Move-only buffer allocated via `sodium_malloc` (with guard pages and canaries) and wiped via `sodium_free`.
-
----
-
-## 7. Prerequisites
-
-To build and run this project on Windows:
-
-1. **Windows 10 / 11** (x64) with **Windows SDK** (10.0.26100.0 or compatible).
-2. **Visual Studio 2022** or **Visual Studio Build Tools 2022** with the **Desktop development with C++** workload.
-3. **CMake** 3.20 or newer (tested with CMake 4.4.4).
-4. **Git** (tested with Git 2.54+).
-5. **vcpkg** package manager. Ensure `VCPKG_ROOT` environment variable points to your vcpkg installation (e.g., `C:\vcpkg`).
-
----
-
-## 8. Build Instructions (PowerShell)
-
-### Method A: Using CMake Presets (Recommended)
-
-#### Debug Build:
-```powershell
-# Configure Debug
-cmake --preset windows-msvc-debug
-
-# Build Debug
-cmake --build --preset debug
-
-# Run CLI
-.\build\debug\Debug\password_manager.exe
+```text
++-----------------------+---------+--------------------+---------------------------------------------+
+| Offset (Bytes)        | Size    | Field Name         | Data Type / Value                           |
++-----------------------+---------+--------------------+---------------------------------------------+
+| 00 - 03 (4 bytes)     | 4 B     | Magic Identifier   | ASCII "SPMV" (0x53, 0x50, 0x4D, 0x56)       |
+| 04 - 07 (4 bytes)     | 4 B     | Format Version     | uint32_t LE (1)                             |
+| 08 - 11 (4 bytes)     | 4 B     | Cipher Algorithm   | uint32_t LE (1 = XChaCha20-Poly1305-IETF)   |
+| 12 - 15 (4 bytes)     | 4 B     | KDF Algorithm      | uint32_t LE (2 = Argon2id v1.3)             |
+| 16 - 23 (8 bytes)     | 8 B     | KDF Ops Limit      | uint64_t LE (2 for interactive default)     |
+| 24 - 31 (8 bytes)     | 8 B     | KDF Memory Limit   | uint64_t LE (67108864 for 64 MiB default)   |
+| 32 - 47 (16 bytes)    | 16 B    | KDF Random Salt    | uint8_t[16] (libsodium CSPRNG salt)         |
++-----------------------+---------+--------------------+---------------------------------------------+  <-- AAD (48 B)
+| 48 - 71 (24 bytes)    | 24 B    | AEAD Nonce         | uint8_t[24] (XChaCha20 random 192-bit nonce)|
+| 72 - 79 (8 bytes)     | 8 B     | Ciphertext Length  | uint64_t LE (Length of ciphertext + tag)    |
++-----------------------+---------+--------------------+---------------------------------------------+  <-- Header (80 B)
+| 80 - EOF              | N bytes | Encrypted Payload  | Encrypted JSON credentials + 16B Poly1305   |
++-----------------------+---------+--------------------+---------------------------------------------+
 ```
 
-#### Release Build:
-```powershell
-# Configure Release
-cmake --preset windows-msvc-release
+### Key Storage Features
+1. **Authenticated Metadata**: The 48-byte cryptographic configuration header is mathematically authenticated as Additional Authenticated Data (AAD) in the XChaCha20-Poly1305 AEAD tag. Modifying any header parameter immediately breaks decryption.
+2. **Resource Boundaries & Pre-validation**:
+   - Vault files capped at 16 MiB.
+   - Argon2id ops limit bounded between 1 and 10 iterations.
+   - Argon2id memory limit bounded between 8 KiB and 512 MiB.
+   - All parameters checked *before* executing expensive key derivation.
+3. **Atomic File Persistence**:
+   - Saves write to an unpredictable temporary file (`<target>.spm_<random_hex>.tmp`) in the same directory.
+   - Explicit disk sync via `FlushFileBuffers()`.
+   - Atomic swap using `ReplaceFileW()` with `REPLACEFILE_WRITE_THROUGH` (or `MoveFileExW()`).
+   - If writing fails at any point, the temporary file is deleted, and the previous valid vault is preserved intact.
 
-# Build Release
+---
+
+## 6. Build and Test Instructions
+
+### Prerequisites
+- Visual Studio 2022 (MSVC v143+ with C++20 and CMake tools installed)
+- CMake 3.20+
+- Git
+
+### Presets
+Configuration, compilation, and testing utilize standardized CMake presets:
+
+```powershell
+# Configure
+cmake --preset debug
+cmake --preset release
+
+# Build
+cmake --build --preset debug
 cmake --build --preset release
 
-# Run CLI
-.\build\release\Release\password_manager.exe
-```
-
----
-
-## 9. Running Tests
-
-### Method A: Using CTest Presets
-
-```powershell
-# Run Debug tests (80 unit tests)
+# Test (GoogleTest via CTest)
 ctest --preset debug-test
-
-# Run Release tests (80 unit tests)
 ctest --preset release-test
 ```
 
-### Method B: Direct Test Executable Invocation
-
-```powershell
-.\build\debug\tests\Debug\password_manager_tests.exe
-.\build\release\tests\Release\password_manager_tests.exe
-```
-
 ---
 
-## 10. Project Directory Structure
+## 7. Project Directory Structure
 
 ```text
 Password Manager/
@@ -206,7 +168,7 @@ Password Manager/
 ├── LICENSE                     # MIT License
 │
 ├── docs/                       # Architectural & design documentation
-│   └── SECURITY.md             # Cryptographic architecture and threat model
+│   └── SECURITY.md             # Cryptographic architecture, format spec & threat model
 │
 ├── include/                    # Public headers
 │   ├── models/                 # Domain and data models
@@ -225,7 +187,10 @@ Password Manager/
 │   │   ├── SodiumInitializer.hpp   # Centralized, thread-safe libsodium initialization
 │   │   ├── Timestamp.hpp       # Testable UTC ISO 8601 timestamp generator
 │   │   ├── Vault.hpp           # In-memory Vault management class
-│   │   └── VaultError.hpp      # Strongly typed vault error representations
+│   │   ├── VaultError.hpp      # Strongly typed vault error representations
+│   │   ├── VaultFileFormat.hpp # Binary vault header layout, AAD, and endianness
+│   │   ├── VaultSerializer.hpp # Sensitive JSON payload serialization
+│   │   └── VaultStorage.hpp    # Atomic vault save, load, and inspection API
 │   └── ui/                     # Presentation layer headers
 │       └── Banner.hpp          # Startup banner interface
 │
@@ -241,7 +206,9 @@ Password Manager/
 │   │   ├── SecureKey.cpp           # Key zeroization and move semantics
 │   │   ├── SodiumInitializer.cpp   # Thread-safe sodium_init wrapper
 │   │   ├── Timestamp.cpp           # UTC ISO 8601 formatting implementation
-│   │   └── Vault.cpp               # Vault in-memory CRUD, search, duplicate detection
+│   │   ├── Vault.cpp               # Vault in-memory CRUD, search, duplicate detection
+│   │   ├── VaultSerializer.cpp     # JSON credential serialization in SecureBuffer
+│   │   └── VaultStorage.cpp        # Atomic persistence & Win32 ReplaceFile implementation
 │   └── ui/                     # UI implementations
 │       └── Banner.cpp              # Banner stream rendering
 │
@@ -257,6 +224,7 @@ Password Manager/
 │   ├── SecureKeyTests.cpp      # Key move-only semantics & zeroization tests
 │   ├── SmokeTest.cpp           # Basic framework sanity test
 │   ├── TimestampTests.cpp      # ISO 8601 UTC format & clock tests
+│   ├── VaultStorageTests.cpp   # Binary format, serialization, and atomic persistence tests
 │   └── VaultTests.cpp          # Full Vault operations, search, duplicate tests
 │
 └── assets/                     # Application assets and resources
@@ -264,22 +232,6 @@ Password Manager/
 
 ---
 
-## 11. Security Considerations & In-Memory Limitations
-
-- **No Encryption Yet:** This batch implements cryptographic primitives and in-memory vault logic. Complete encrypted file-based vault persistence will be introduced in Batch 5.
-- **Memory Zeroization:** Sensitive keys (`SecureKey`) and decrypted payloads (`SecureBuffer`) use libsodium memory protection (`sodium_memzero`, `sodium_malloc`, `sodium_free`). Plaintext credentials inside the domain model (`std::string`) will be wrapped in protected storage in the vault persistence batch.
-- **No Password Exposure:** Stored and generated passwords, master passwords, and secret keys are never logged, never printed automatically, and never searched.
-- **Randomness Integrity:** Random generation exclusively relies on libsodium OS-level cryptographic entropy. Weak or predictable PRNGs (`rand()`, `mt19937`) are never used.
-
----
-
-## 12. Planned Functionality (Upcoming Batches)
-
-- **Batch 5: Vault Storage & Serialization**: Encrypted JSON persistence, atomic file writing, safe backups, authenticated vault file format.
-- **Batch 6: CLI & Interactive User Workflows**: Master password setup, unlock, record search, add, edit, and clipboard integration.
-
----
-
-## 13. License
+## 8. License
 
 This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.

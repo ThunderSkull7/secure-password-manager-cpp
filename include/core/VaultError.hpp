@@ -20,7 +20,16 @@ enum class VaultErrorCode {
     InvalidNonce,
     InvalidCiphertext,
     PayloadTooLarge,
-    AllocationFailed
+    AllocationFailed,
+    InvalidVaultFormat,
+    UnsupportedVersion,
+    CorruptedVault,
+    SerializationError,
+    DeserializationError,
+    FileReadError,
+    FileWriteError,
+    AtomicReplacementError,
+    ResourceLimitExceeded
 };
 
 struct VaultError {

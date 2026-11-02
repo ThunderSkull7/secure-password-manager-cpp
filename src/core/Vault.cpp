@@ -37,6 +37,38 @@ bool contains_ignore_case(std::string_view haystack, std::string_view needle_low
 Vault::Vault(std::shared_ptr<IClock> clock)
     : clock_(clock ? std::move(clock) : std::make_shared<SystemClock>()) {}
 
+Result<Vault> Vault::from_credentials(std::vector<models::Credential> credentials,
+                                      std::shared_ptr<IClock> clock) {
+    Vault vault(std::move(clock));
+    models::CredentialId max_id = 0;
+
+    for (auto& cred : credentials) {
+        if (cred.id() == 0) {
+            return Result<Vault>::failure(VaultErrorCode::ValidationError,
+                                          "Credential ID must be positive (greater than 0).");
+        }
+        if (vault.credentials_.contains(cred.id())) {
+            return Result<Vault>::failure(
+                VaultErrorCode::ValidationError,
+                "Duplicate credential ID detected: " + std::to_string(cred.id()));
+        }
+        if (cred.id() > max_id) {
+            max_id = cred.id();
+        }
+        vault.credentials_.emplace(cred.id(), std::move(cred));
+    }
+
+    if (max_id == std::numeric_limits<models::CredentialId>::max()) {
+        vault.next_id_ = max_id;
+    } else if (max_id >= INITIAL_CREDENTIAL_ID) {
+        vault.next_id_ = max_id + 1;
+    } else {
+        vault.next_id_ = INITIAL_CREDENTIAL_ID;
+    }
+
+    return Result<Vault>(std::move(vault));
+}
+
 Result<models::CredentialId> Vault::add_credential(const models::CredentialInput& input) {
     const auto validation = CredentialValidator::validate(input);
     if (!validation.is_valid) {
