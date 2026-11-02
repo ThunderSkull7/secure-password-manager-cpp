@@ -1,6 +1,6 @@
 # Security Architecture & Cryptographic Primitives
 
-This document outlines the cryptographic standards, memory security designs, parameters, vault binary format, atomic persistence model, and threat model considerations implemented in the Secure Password Manager (Batches 1–5).
+This document outlines the cryptographic standards, memory security designs, parameters, vault binary format, atomic persistence model, interactive CLI input protection, and threat model considerations implemented in the Secure Password Manager (Batches 1–6).
 
 ---
 
@@ -110,17 +110,30 @@ To ensure stability against hostile or corrupt vault files:
 
 ---
 
-## 7. Threat Model Considerations
+## 7. Interactive CLI Input & Console Security
+
+Interactive input incorporates several defenses against shoulder-surfing and memory leaks:
+
+1. **No Terminal Echo**: When prompting for the master password, terminal echo is disabled using Win32 `SetConsoleMode` with the `ENABLE_ECHO_INPUT` flag cleared.
+2. **RAII Restoration Guarantee**: `ConsoleEchoGuard` restores original console mode upon object destruction across all code execution paths, including exceptions, signals, and early returns.
+3. **Password Masking by Default**: All list and search views suppress password columns. View details masks the password (`••••••••••••`).
+4. **Explicit Password Reveal**: Plaintext passwords are displayed only upon deliberate user command (`[R] Reveal`), and the console offers prompt clearing immediately after viewing.
+5. **Session Locking**: Locking the vault zeroizes the derived `SecureKey` session key, unloads the `Vault` instance from memory, and returns the application to the locked master password prompt.
+
+---
+
+## 8. Threat Model Considerations
 
 1. **Tampering & Bit-Flipping**: Protected by Poly1305 MAC across ciphertext and the 48-byte AAD header. Modifying even 1 bit in ciphertext, nonce, salt, or parameters results in `VaultErrorCode::AuthenticationFailed`.
 2. **Offline Brute-Force Attacks**: Mitigated by Argon2id's 64 MiB memory hardness, increasing the cost of specialized FPGA/ASIC hardware attacks.
 3. **Nonce Reuse**: Mitigated by XChaCha20's 192-bit random nonce space, freshly generated via CSPRNG on every single save.
 4. **Information Leakage**: Decryption and authentication failures return generic error messages (`VaultErrorCode::AuthenticationFailed`) so an adversary cannot differentiate between an incorrect master password and payload tampering. Diagnostic logs never output passwords, decrypted plaintext, or keys.
-5. **Dangling Plaintext**: Unlocked vaults store decrypted credentials in memory only for the lifetime of the application process.
+5. **Dangling Plaintext**: Unlocked vaults store decrypted credentials in memory only for the lifetime of the active unlocked session.
 
 ---
 
-## 8. Remaining Limitations
+## 9. Remaining Limitations
 
 - **Process Memory Snooping**: While sensitive payloads use `SecureBuffer` (guarded by guard pages and `sodium_memzero`), credentials held in `models::Credential` utilize standard `std::string` fields. An attacker with full administrative privileges or kernel-level debugging tools on the local machine could inspect process memory. Future batches will evaluate custom secure string wrappers for domain models.
+- **Terminal Buffer Limitations**: While clearing the screen overwrites visible terminal rows, terminal emulators (like Windows Terminal) may keep scrollback history. Users are advised to close terminal sessions after managing sensitive credentials.
 - **Crash Durability of Filesystem Metadata**: While `FlushFileBuffers` and `REPLACEFILE_WRITE_THROUGH` force file contents and entries to disk, filesystem journal commits depend on host OS filesystem drivers (e.g. NTFS).

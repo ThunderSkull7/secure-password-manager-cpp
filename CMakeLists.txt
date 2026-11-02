@@ -54,6 +54,8 @@ add_library(password_manager_lib STATIC
     src/core/CryptoService.cpp
     src/core/VaultSerializer.cpp
     src/core/VaultStorage.cpp
+    src/cli/Console.cpp
+    src/cli/PasswordManagerApp.cpp
 )
 
 target_include_directories(password_manager_lib

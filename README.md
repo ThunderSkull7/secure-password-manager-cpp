@@ -54,7 +54,16 @@ Secure Password Manager provides secure, authenticated, and encrypted local stor
 > - Sensitive JSON serialization and deserialization within `SecureBuffer`.
 > - Robust atomic file persistence on Windows (`ReplaceFileW`, `MoveFileExW`, `FlushFileBuffers`).
 > - Tamper resistance and corruption detection (truncated files, bit-flips, trailing bytes rejected).
-> - Comprehensive test suite (108 total tests passing in Debug and Release).
+>
+> **Batch 6: Interactive CLI Application Integration Complete**
+> - First-time vault creation wizard with master password confirmation and strength guidance.
+> - Terminal echo suppression (`ConsoleEchoGuard` RAII) for masked master password entry on Windows.
+> - Interactive main menu with intuitive 10-option workflow navigation.
+> - Full credential lifecycle management: Add, View All, Search, View Details, Edit, Delete.
+> - Explicit password reveal protection with screen clearing.
+> - Integrated password generator with configurable length and character categories.
+> - In-session unsaved changes tracking, atomic save, and graceful session locking.
+> - Complete test coverage (120 tests passing in Debug and Release).
 
 ---
 
@@ -73,88 +82,92 @@ Secure Password Manager provides secure, authenticated, and encrypted local stor
 
 ---
 
-## 4. Credential Model & In-Memory Vault
+## 4. User Guide: Interactive CLI Workflows
 
-### Credential Fields
-| Field | Type | Description | Constraints |
-|---|---|---|---|
-| `id` | `uint64_t` | Vault-local identifier | Assigned monotonically starting at 1; immutable |
-| `service` | `string` | Service or application | Required; trimmed; max 256 chars |
-| `username` | `string` | Username or email | Optional; trimmed; max 256 chars |
-| `password` | `string` | Credential secret | Required; never trimmed or altered; max 4096 chars |
-| `url` | `string` | Optional service URL | Optional; validated for valid scheme/host syntax; max 2048 chars |
-| `category` | `string` | Organizing folder/tag | Optional; trimmed; max 128 chars |
-| `notes` | `string` | Additional remarks | Optional; max 65536 chars (64 KB) |
-| `created_at` | `string` | Creation timestamp | UTC ISO 8601 (`YYYY-MM-DDTHH:MM:SSZ`); immutable |
-| `updated_at` | `string` | Last modified timestamp | UTC ISO 8601 (`YYYY-MM-DDTHH:MM:SSZ`); updated on edit |
+### 4.1 Running the Application
+```powershell
+# Run with default vault location ("vault.dat" in working directory)
+.\build\release\Release\password_manager.exe
 
----
-
-## 5. Binary Vault Format (`SPMV`) & Storage Architecture
-
-Vault persistence is managed by `VaultStorage`, `VaultSerializer`, and `VaultFileFormat`:
-
-```text
-+-----------------------+---------+--------------------+---------------------------------------------+
-| Offset (Bytes)        | Size    | Field Name         | Data Type / Value                           |
-+-----------------------+---------+--------------------+---------------------------------------------+
-| 00 - 03 (4 bytes)     | 4 B     | Magic Identifier   | ASCII "SPMV" (0x53, 0x50, 0x4D, 0x56)       |
-| 04 - 07 (4 bytes)     | 4 B     | Format Version     | uint32_t LE (1)                             |
-| 08 - 11 (4 bytes)     | 4 B     | Cipher Algorithm   | uint32_t LE (1 = XChaCha20-Poly1305-IETF)   |
-| 12 - 15 (4 bytes)     | 4 B     | KDF Algorithm      | uint32_t LE (2 = Argon2id v1.3)             |
-| 16 - 23 (8 bytes)     | 8 B     | KDF Ops Limit      | uint64_t LE (2 for interactive default)     |
-| 24 - 31 (8 bytes)     | 8 B     | KDF Memory Limit   | uint64_t LE (67108864 for 64 MiB default)   |
-| 32 - 47 (16 bytes)    | 16 B    | KDF Random Salt    | uint8_t[16] (libsodium CSPRNG salt)         |
-+-----------------------+---------+--------------------+---------------------------------------------+  <-- AAD (48 B)
-| 48 - 71 (24 bytes)    | 24 B    | AEAD Nonce         | uint8_t[24] (XChaCha20 random 192-bit nonce)|
-| 72 - 79 (8 bytes)     | 8 B     | Ciphertext Length  | uint64_t LE (Length of ciphertext + tag)    |
-+-----------------------+---------+--------------------+---------------------------------------------+  <-- Header (80 B)
-| 80 - EOF              | N bytes | Encrypted Payload  | Encrypted JSON credentials + 16B Poly1305   |
-+-----------------------+---------+--------------------+---------------------------------------------+
+# Run with a custom vault file path
+.\build\release\Release\password_manager.exe "D:\MySecureFiles\personal.vault"
 ```
 
-### Key Storage Features
-1. **Authenticated Metadata**: The 48-byte cryptographic configuration header is mathematically authenticated as Additional Authenticated Data (AAD) in the XChaCha20-Poly1305 AEAD tag. Modifying any header parameter immediately breaks decryption.
-2. **Resource Boundaries & Pre-validation**:
-   - Vault files capped at 16 MiB.
-   - Argon2id ops limit bounded between 1 and 10 iterations.
-   - Argon2id memory limit bounded between 8 KiB and 512 MiB.
-   - All parameters checked *before* executing expensive key derivation.
-3. **Atomic File Persistence**:
-   - Saves write to an unpredictable temporary file (`<target>.spm_<random_hex>.tmp`) in the same directory.
-   - Explicit disk sync via `FlushFileBuffers()`.
-   - Atomic swap using `ReplaceFileW()` with `REPLACEFILE_WRITE_THROUGH` (or `MoveFileExW()`).
-   - If writing fails at any point, the temporary file is deleted, and the previous valid vault is preserved intact.
+### 4.2 First-Time Setup & Vault Creation
+If no vault exists at the specified path, the application automatically launches the vault initialization wizard:
+1. Enter your desired master password. Console echo is suppressed for security.
+2. Re-enter the password to confirm.
+3. The application derives a 256-bit encryption key using Argon2id and atomically creates an encrypted, authenticated binary vault file.
+
+### 4.3 Unlocking an Existing Vault
+When opening an existing vault:
+1. The application inspects and validates the binary header and KDF resource limits.
+2. Enter your master password.
+3. Upon successful key derivation and Poly1305 authentication verification, you are greeted with the main menu.
+4. Up to 5 attempts are permitted before termination, with short throttling intervals to discourage brute-force attempts.
+
+### 4.4 Main Menu Options
+```text
+----------------------------------------
+        SECURE PASSWORD MANAGER         
+Vault: personal.vault
+----------------------------------------
+ 1. Add a credential
+ 2. View all credentials
+ 3. Search credentials
+ 4. View credential details
+ 5. Edit a credential
+ 6. Delete a credential
+ 7. Generate a password
+ 8. Save vault
+ 9. Lock vault
+10. Exit
+----------------------------------------
+```
+
+- **Option 1: Add a Credential**: Collects service, username, password, URL, category, and notes. Offers an instant option `[G]` to generate a strong random password. Performs non-blocking duplicate checks.
+- **Option 2: View All Credentials**: Prints a clean summary table (ID, Service, Username, Category). Passwords are strictly omitted from this view.
+- **Option 3: Search Credentials**: Case-insensitive partial search across service, username, URL, category, and notes. Passwords are never searched or displayed.
+- **Option 4: View Credential Details**: Shows full details with the password masked as `••••••••••••`. Pressing `[R]` reveals the password, followed by an immediate prompt to clear the console.
+- **Option 5: Edit a Credential**: Allows updating individual fields. Pressing Enter keeps the existing value.
+- **Option 6: Delete a Credential**: Requires explicit `[y/N]` confirmation before removing a record.
+- **Option 7: Generate a Password**: Standalone generator with configurable length (8–256) and character sets (uppercase, lowercase, digits, symbols, ambiguous character exclusion).
+- **Option 8: Save Vault**: Persists all changes atomically to the encrypted file without re-running Argon2id.
+- **Option 9: Lock Vault**: Checks for unsaved changes, wipes the derived session key from memory, and returns to the vault unlock screen.
+- **Option 10: Exit**: Prompts to save any unsaved changes before terminating the application.
+
+### 4.5 Vault Storage & Backup Advice
+- Vault files are encrypted using XChaCha20-Poly1305 and protected by Argon2id key derivation.
+- To back up your vault, simply copy your `.vault` or `vault.dat` file to your backup storage (e.g., an external drive).
+- Never share your master password. Without the master password, an encrypted vault cannot be recovered.
 
 ---
 
-## 6. Build and Test Instructions
+## 5. Build and Test Instructions
 
 ### Prerequisites
 - Visual Studio 2022 (MSVC v143+ with C++20 and CMake tools installed)
 - CMake 3.20+
 - Git
 
-### Presets
-Configuration, compilation, and testing utilize standardized CMake presets:
-
+### Build & Test Commands
 ```powershell
-# Configure
+# Configure presets
 cmake --preset debug
 cmake --preset release
 
-# Build
+# Build executable and libraries
 cmake --build --preset debug
 cmake --build --preset release
 
-# Test (GoogleTest via CTest)
+# Run automated test suites (120 tests)
 ctest --preset debug-test
 ctest --preset release-test
 ```
 
 ---
 
-## 7. Project Directory Structure
+## 6. Project Directory Structure
 
 ```text
 Password Manager/
@@ -171,6 +184,9 @@ Password Manager/
 │   └── SECURITY.md             # Cryptographic architecture, format spec & threat model
 │
 ├── include/                    # Public headers
+│   ├── cli/                    # Presentation and application orchestration
+│   │   ├── Console.hpp         # Console I/O, echo suppression guard (Win32 RAII)
+│   │   └── PasswordManagerApp.hpp # Interactive CLI workflow controller
 │   ├── models/                 # Domain and data models
 │   │   └── Credential.hpp      # Credential model & CredentialInput structure
 │   ├── core/                   # Core business logic and engine
@@ -196,6 +212,9 @@ Password Manager/
 │
 ├── src/                        # Implementation files
 │   ├── main.cpp                # CLI entry point
+│   ├── cli/                    # CLI implementations
+│   │   ├── Console.cpp         # Terminal masking and input reader
+│   │   └── PasswordManagerApp.cpp # Menu navigation and workflow execution
 │   ├── models/                 # Model implementations
 │   │   └── Credential.cpp      # Credential constructor & update logic
 │   ├── core/                   # Core engine implementations
@@ -216,6 +235,7 @@ Password Manager/
 │   ├── CMakeLists.txt          # Test build configuration & CTest discovery
 │   ├── AppInfoTest.cpp         # Metadata & build configuration tests
 │   ├── BannerTest.cpp          # UI banner output verification test
+│   ├── CliAppTests.cpp         # End-to-end CLI workflows & interactive simulation tests
 │   ├── CredentialTests.cpp     # Credential model & update tests
 │   ├── CredentialValidatorTests.cpp # Validation & boundary tests
 │   ├── CryptoServiceTests.cpp  # KDF, encryption, decryption, and AAD tests
@@ -232,6 +252,6 @@ Password Manager/
 
 ---
 
-## 8. License
+## 7. License
 
 This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
