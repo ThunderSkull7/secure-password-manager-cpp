@@ -64,7 +64,7 @@ PasswordManagerApp::PasswordManagerApp(std::filesystem::path vault_path, std::is
 int PasswordManagerApp::run() {
     ui::display_welcome_banner(console_.out());
 
-    while (!should_exit_) {
+    while (!should_exit_ && !console_.is_eof()) {
         if (!is_unlocked_) {
             if (!initialize_or_unlock()) {
                 break;
@@ -101,13 +101,24 @@ bool PasswordManagerApp::create_vault_workflow() {
     console_.println();
 
     while (true) {
+        if (console_.is_eof()) {
+            return false;
+        }
         std::string pwd = console_.read_password("Enter new master password: ");
+        ScopedStringScrubber scrub_pwd(pwd);
         if (pwd.empty()) {
+            if (console_.is_eof()) {
+                return false;
+            }
             console_.println("[!] Master password cannot be empty. Please try again.");
             continue;
         }
 
         std::string confirm = console_.read_password("Confirm master password: ");
+        ScopedStringScrubber scrub_confirm(confirm);
+        if (console_.is_eof()) {
+            return false;
+        }
         if (pwd != confirm) {
             console_.println("[!] Passwords do not match. Please try again.");
             continue;
@@ -171,13 +182,22 @@ bool PasswordManagerApp::unlock_vault_workflow() {
     console_.println();
 
     for (int attempt = 1; attempt <= 5; ++attempt) {
+        if (console_.is_eof()) {
+            should_exit_ = true;
+            return false;
+        }
         std::string pwd = console_.read_password("Enter master password (or 'q' to quit): ");
+        ScopedStringScrubber scrub_pwd(pwd);
         if (pwd == "q" || pwd == "quit") {
             should_exit_ = true;
             return false;
         }
 
         if (pwd.empty()) {
+            if (console_.is_eof()) {
+                should_exit_ = true;
+                return false;
+            }
             continue;
         }
 
@@ -238,6 +258,10 @@ void PasswordManagerApp::run_main_menu() {
     console_.println("----------------------------------------");
 
     std::string choice = console_.read_line("Enter choice (1-10): ");
+    if (console_.is_eof()) {
+        should_exit_ = true;
+        return;
+    }
     auto first = choice.find_first_not_of(" \t\r\n");
     if (first == std::string::npos) {
         return;
@@ -316,6 +340,11 @@ std::string PasswordManagerApp::prompt_password_with_generate_option(std::string
 }
 
 void PasswordManagerApp::handle_add_credential() {
+    if (!is_unlocked_ || !vault_) {
+        console_.println("[!] Vault is locked.");
+        return;
+    }
+
     console_.println();
     console_.println("--- Add New Credential ---");
 
@@ -327,6 +356,7 @@ void PasswordManagerApp::handle_add_credential() {
 
     std::string username = console_.read_line("Username / Email (optional): ");
     std::string password = prompt_password_with_generate_option("Credential Password:");
+    ScopedStringScrubber scrub_pwd(password);
     if (password.empty()) {
         console_.println("[!] Password cannot be empty.");
         return;
@@ -358,6 +388,11 @@ void PasswordManagerApp::handle_add_credential() {
 }
 
 void PasswordManagerApp::handle_view_all_credentials() {
+    if (!is_unlocked_ || !vault_) {
+        console_.println("[!] Vault is locked.");
+        return;
+    }
+
     console_.println();
     console_.println("--- All Vault Credentials ---");
     auto creds = vault_->list_credentials();
@@ -365,6 +400,11 @@ void PasswordManagerApp::handle_view_all_credentials() {
 }
 
 void PasswordManagerApp::handle_search_credentials() {
+    if (!is_unlocked_ || !vault_) {
+        console_.println("[!] Vault is locked.");
+        return;
+    }
+
     console_.println();
     console_.println("--- Search Credentials ---");
     std::string query = console_.read_line("Enter search query: ");
@@ -382,6 +422,11 @@ void PasswordManagerApp::handle_search_credentials() {
 }
 
 void PasswordManagerApp::handle_view_credential_details() {
+    if (!is_unlocked_ || !vault_) {
+        console_.println("[!] Vault is locked.");
+        return;
+    }
+
     console_.println();
     console_.println("--- View Credential Details ---");
     std::string id_str = console_.read_line("Enter Credential ID: ");
@@ -417,13 +462,19 @@ void PasswordManagerApp::handle_view_credential_details() {
     if (first != std::string::npos &&
         std::tolower(static_cast<unsigned char>(action[first])) == 'r') {
         console_.println();
-        console_.println("Password: " + c.password());
+        console_.print("Password: ");
+        console_.println(c.password());
         console_.pause("Press Enter to hide password and continue...");
         console_.clear_screen();
     }
 }
 
 void PasswordManagerApp::handle_edit_credential() {
+    if (!is_unlocked_ || !vault_) {
+        console_.println("[!] Vault is locked.");
+        return;
+    }
+
     console_.println();
     console_.println("--- Edit Credential ---");
     std::string id_str = console_.read_line("Enter Credential ID to edit: ");
@@ -457,6 +508,7 @@ void PasswordManagerApp::handle_edit_credential() {
     }
 
     std::string new_password;
+    ScopedStringScrubber scrub_new_pwd(new_password);
     if (console_.read_confirmation("Do you want to change the password?", false)) {
         new_password = prompt_password_with_generate_option("New Password:");
     }
@@ -500,6 +552,11 @@ void PasswordManagerApp::handle_edit_credential() {
 }
 
 void PasswordManagerApp::handle_delete_credential() {
+    if (!is_unlocked_ || !vault_) {
+        console_.println("[!] Vault is locked.");
+        return;
+    }
+
     console_.println();
     console_.println("--- Delete Credential ---");
     std::string id_str = console_.read_line("Enter Credential ID to delete: ");
@@ -579,6 +636,11 @@ void PasswordManagerApp::handle_generate_password() {
 }
 
 void PasswordManagerApp::handle_save_vault() {
+    if (!is_unlocked_ || !vault_) {
+        console_.println("[!] Vault is locked.");
+        return;
+    }
+
     if (!has_unsaved_changes_) {
         console_.println("[i] No unsaved changes.");
         return;
@@ -635,6 +697,7 @@ void PasswordManagerApp::handle_lock_vault() {
     }
 
     session_key_ = core::SecureKey();
+    vault_header_ = core::VaultHeader();
     vault_.reset();
     is_unlocked_ = false;
     has_unsaved_changes_ = false;
@@ -647,6 +710,7 @@ void PasswordManagerApp::handle_exit() {
     }
 
     session_key_ = core::SecureKey();
+    vault_header_ = core::VaultHeader();
     vault_.reset();
     is_unlocked_ = false;
     should_exit_ = true;

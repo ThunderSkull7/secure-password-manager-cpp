@@ -312,4 +312,39 @@ TEST(CliAppTest, LockAndReunlockCycleWithinSameRun) {
     EXPECT_NE(output.find("Twitter"), std::string::npos);
 }
 
+TEST(CliAppTest, ScopedStringScrubberWipesMemory) {
+    std::string secret = "SuperSecretPassword123!";
+    {
+        ScopedStringScrubber scrubber(secret);
+        EXPECT_FALSE(secret.empty());
+    }
+    EXPECT_TRUE(secret.empty());
+}
+
+TEST(CliAppTest, DirectoryPathRejectedDuringInit) {
+    TempDirectoryGuard temp_dir;
+    std::stringstream in("10\n");
+    std::stringstream out;
+
+    PasswordManagerApp app(temp_dir.path(), in, out);
+    int code = app.run();
+    EXPECT_EQ(code, 0);
+
+    std::string output = out.str();
+    EXPECT_NE(output.find("Vault file is invalid or corrupted"), std::string::npos);
+}
+
+TEST(CliAppTest, UnexpectedEOFHandledGracefully) {
+    TempDirectoryGuard temp_dir;
+    const auto vault_path = temp_dir.path() / "eof_test.dat";
+
+    // Immediate EOF on stdin
+    std::stringstream in("");
+    std::stringstream out;
+
+    PasswordManagerApp app(vault_path, in, out);
+    int code = app.run();
+    EXPECT_EQ(code, 0);
+}
+
 }  // namespace password_manager::cli::test

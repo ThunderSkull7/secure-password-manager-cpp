@@ -116,9 +116,27 @@ Interactive input incorporates several defenses against shoulder-surfing and mem
 
 1. **No Terminal Echo**: When prompting for the master password, terminal echo is disabled using Win32 `SetConsoleMode` with the `ENABLE_ECHO_INPUT` flag cleared.
 2. **RAII Restoration Guarantee**: `ConsoleEchoGuard` restores original console mode upon object destruction across all code execution paths, including exceptions, signals, and early returns.
-3. **Password Masking by Default**: All list and search views suppress password columns. View details masks the password (`••••••••••••`).
-4. **Explicit Password Reveal**: Plaintext passwords are displayed only upon deliberate user command (`[R] Reveal`), and the console offers prompt clearing immediately after viewing.
-5. **Session Locking**: Locking the vault zeroizes the derived `SecureKey` session key, unloads the `Vault` instance from memory, and returns the application to the locked master password prompt.
+3. **RAII String Scrubbing (`ScopedStringScrubber`)**: All interactive password inputs (master passwords, confirm passwords, generated passwords, edited passwords) are encapsulated in `ScopedStringScrubber` guards which invoke `sodium_memzero` on scope exit.
+4. **Ctrl+C Input Zeroization**: If the user aborts input with Ctrl+C in the console reader, any accumulated keystrokes in the buffer are immediately scrubbed with `sodium_memzero`.
+5. **No Intermediate Heap Clones on Reveal**: Displaying credential passwords writes directly to the console stream without allocating temporary concatenated heap copies.
+6. **Defensive Locked-State Session Guards**: Every CLI action handler validates session state (`if (!is_unlocked_ || !vault_)`) before performing any operations.
+7. **Vault Header Zeroing on Lock/Exit**: The in-memory `vault_header_` (retaining salt and nonce) is explicitly reset upon locking or application exit.
+8. **Password Masking by Default**: All list and search views suppress password columns. View details masks the password (`••••••••••••`).
+9. **Explicit Password Reveal**: Plaintext passwords are displayed only upon deliberate user command (`[R] Reveal`), and the console offers prompt clearing immediately after viewing.
+10. **Session Locking**: Locking the vault zeroizes the derived `SecureKey` session key, unloads the `Vault` instance from memory, resets the header, and returns the application to the locked master password prompt.
+
+---
+
+## 8. Batch 7 Security Audit & Remediations
+
+| Finding ID | Severity | Component | Issue | Remediation Status |
+|---|---|---|---|---|
+| **SEC-01** | High | CLI Layer (`PasswordManagerApp`) | Master passwords and credentials lingered in `std::string` buffers until memory reuse. | **Fixed**: Introduced `ScopedStringScrubber` and `secure_zero_string()` using `sodium_memzero` across all workflow methods. |
+| **SEC-02** | Medium | Storage Layer (`VaultStorage`) | Target path being an existing directory was not caught early before temporary file creation. | **Fixed**: Added explicit `std::filesystem::is_directory` guard in `inspect_header` and `write_atomic_file`. |
+| **SEC-03** | Medium | Session Management (`PasswordManagerApp`) | `vault_header_` retained salt and nonce across session lock/unlock cycles. | **Fixed**: Reset `vault_header_ = VaultHeader()` upon locking and application exit. |
+| **SEC-04** | Low | CLI Layer (`PasswordManagerApp`) | Individual action handlers lacked defense-in-depth checks against corrupted session state. | **Fixed**: Added defensive guard `if (!is_unlocked_ || !vault_)` to all action handlers. |
+| **SEC-05** | Low | Presentation Layer (`PasswordManagerApp`) | Credential reveal concatenated strings into a temporary heap copy before printing. | **Fixed**: Replaced with direct stream calls `print("Password: ")` and `println(c.password())`. |
+| **SEC-06** | Informational | Platform / Environment | Windows Terminal scrollback buffer and OS paging file could retain memory fragments. | **Documented**: Documented guidance in `SECURITY.md` regarding terminal history clearing and pagefile encryption (`fsutil behavior set EncryptPagingFile 1`). |
 
 ---
 

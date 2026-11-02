@@ -12,7 +12,10 @@ namespace password_manager::cli {
 
 Console::Console(std::istream& in, std::ostream& out) : in_(in), out_(out) {
 #ifdef _WIN32
-    is_interactive_ = (&in_ == &std::cin) && (_isatty(_fileno(stdin)) != 0);
+    DWORD mode = 0;
+    HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
+    is_interactive_ = (&in_ == &std::cin) && (_isatty(_fileno(stdin)) != 0) &&
+                      (hStdin != INVALID_HANDLE_VALUE && GetConsoleMode(hStdin, &mode));
 #else
     is_interactive_ = (&in_ == &std::cin);
 #endif
@@ -78,6 +81,7 @@ std::string Console::read_password(std::string_view prompt) {
             }
         } else if (ch == 3) {
             // Ctrl+C signal handling
+            secure_zero_string(password);
             println();
             return "";
         } else if (ch == 0 || ch == 0xE0) {

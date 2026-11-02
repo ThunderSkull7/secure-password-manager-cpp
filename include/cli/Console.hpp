@@ -1,5 +1,7 @@
 #pragma once
 
+#include <sodium.h>
+
 #include <iostream>
 #include <string>
 #include <string_view>
@@ -15,6 +17,31 @@
 #endif
 
 namespace password_manager::cli {
+
+/**
+ * @brief Zeroizes sensitive character data in a std::string before clearing it.
+ */
+inline void secure_zero_string(std::string& str) noexcept {
+    if (!str.empty()) {
+        sodium_memzero(str.data(), str.size());
+        str.clear();
+    }
+}
+
+/**
+ * @brief RAII helper to automatically zeroize a string when leaving a scope.
+ */
+class ScopedStringScrubber {
+  public:
+    explicit ScopedStringScrubber(std::string& str) noexcept : str_(str) {}
+    ~ScopedStringScrubber() { secure_zero_string(str_); }
+
+    ScopedStringScrubber(const ScopedStringScrubber&) = delete;
+    ScopedStringScrubber& operator=(const ScopedStringScrubber&) = delete;
+
+  private:
+    std::string& str_;
+};
 
 #ifdef _WIN32
 /**
@@ -71,6 +98,8 @@ class Console {
 
     void clear_screen();
     void pause(std::string_view prompt = "Press Enter to continue...");
+
+    [[nodiscard]] bool is_eof() const noexcept { return in_.eof() || !in_.good(); }
 
     [[nodiscard]] bool is_interactive() const noexcept { return is_interactive_; }
     void set_interactive(bool interactive) noexcept { is_interactive_ = interactive; }

@@ -635,4 +635,16 @@ TEST(VaultStorageTest, MaliciousLargePayloadLengthRejectedBeforeAllocation) {
     EXPECT_EQ(inspect_res.error().code, VaultErrorCode::ResourceLimitExceeded);
 }
 
+TEST(VaultStorageTest, DirectoryPathRejectedAsVaultFile) {
+    TempDirectoryGuard temp_dir;
+    auto inspect_res = VaultStorage::inspect_header(temp_dir.path());
+    EXPECT_FALSE(inspect_res.has_value());
+    EXPECT_EQ(inspect_res.error().code, VaultErrorCode::InvalidVaultFormat);
+
+    const std::vector<unsigned char> dummy_data{1, 2, 3};
+    auto write_res = VaultStorage::write_atomic_file(temp_dir.path(), dummy_data);
+    EXPECT_FALSE(write_res.has_value());
+    EXPECT_EQ(write_res.error().code, VaultErrorCode::FileWriteError);
+}
+
 }  // namespace password_manager::core::test

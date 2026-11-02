@@ -32,6 +32,12 @@ Result<VaultHeader> VaultStorage::inspect_header(const std::filesystem::path& pa
                                             "Symbolic links are not supported for vault storage.");
     }
 
+    if (std::filesystem::is_directory(path, ec)) {
+        return Result<VaultHeader>::failure(
+            VaultErrorCode::InvalidVaultFormat,
+            "Target path is a directory, not a vault file: " + path.string());
+    }
+
     const auto file_size = std::filesystem::file_size(path, ec);
     if (ec) {
         return Result<VaultHeader>::failure(VaultErrorCode::FileReadError,
@@ -105,6 +111,12 @@ Result<void> VaultStorage::write_atomic_file(const std::filesystem::path& target
     if (std::filesystem::is_symlink(target_path, ec)) {
         return Result<void>::failure(VaultErrorCode::FileWriteError,
                                      "Symbolic links are not supported for vault storage.");
+    }
+
+    if (std::filesystem::is_directory(target_path, ec)) {
+        return Result<void>::failure(
+            VaultErrorCode::FileWriteError,
+            "Target path is an existing directory, not a file: " + target_path.string());
     }
 
     const std::filesystem::path parent = target_path.parent_path();
