@@ -38,10 +38,17 @@ jobs:
           }
 
       - name: Configure CMake (${{ matrix.config.name }})
-        run: cmake --preset ${{ matrix.config.configure-preset }}
+        shell: pwsh
+        run: |
+          if (Test-Path "C:\Program Files\Microsoft Visual Studio\18") {
+            cmake --preset ${{ matrix.config.configure-preset }} -G "Visual Studio 18 2026"
+          } else {
+            cmake --preset ${{ matrix.config.configure-preset }}
+          }
 
       - name: Build (${{ matrix.config.name }})
         run: cmake --build --preset ${{ matrix.config.build-preset }}
 
       - name: Run Tests (${{ matrix.config.name }})
         run: ctest --preset ${{ matrix.config.test-preset }} --output-on-failure
+
