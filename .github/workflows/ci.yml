@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.config.name }}
+    runs-on: windows-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - name: Windows MSVC Debug
+            configure-preset: windows-msvc-debug
+            build-preset: debug
+            test-preset: debug-test
+          - name: Windows MSVC Release
+            configure-preset: windows-msvc-release
+            build-preset: release
+            test-preset: release-test
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up vcpkg environment
+        shell: pwsh
+        run: |
+          if ($env:VCPKG_INSTALLATION_ROOT) {
+            echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
+          } elseif (Test-Path "C:\vcpkg") {
+            echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
+          }
+
+      - name: Configure CMake (${{ matrix.config.name }})
+        run: cmake --preset ${{ matrix.config.configure-preset }}
+
+      - name: Build (${{ matrix.config.name }})
+        run: cmake --build --preset ${{ matrix.config.build-preset }}
+
+      - name: Run Tests (${{ matrix.config.name }})
+        run: ctest --preset ${{ matrix.config.test-preset }} --output-on-failure

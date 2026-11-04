@@ -1,5 +1,12 @@
 # Secure Password Manager
 
+[![CI](https://github.com/ThunderSkull7/secure-password-manager-cpp/actions/workflows/ci.yml/badge.svg)](https://github.com/ThunderSkull7/secure-password-manager-cpp/actions/workflows/ci.yml)
+![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg?logo=c%2B%2B)
+![CMake](https://img.shields.io/badge/CMake-3.20%2B-064F8C.svg?logo=cmake)
+![Platform](https://img.shields.io/badge/Platform-Windows%20MSVC-0078D6.svg?logo=windows)
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+![Tests](https://img.shields.io/badge/Tests-124%20passing-brightgreen.svg)
+
 A modern, security-conscious C++20 local password manager vault application designed for robust offline credential management.
 
 ---
@@ -72,7 +79,7 @@ Secure Password Manager provides secure, authenticated, and encrypted local stor
 > - Vault header state zeroing (`vault_header_`) on session lock and application exit.
 > - Directory path rejection guarding against invalid vault file destinations.
 > - Direct streaming for credential password reveals, eliminating temporary heap allocations.
-> - 124 automated tests passing across 12 test suites in both Debug and Release.
+> - 124 automated tests passing across 16 test suites in both Debug and Release.
 > - Complete professional documentation: `docs/ARCHITECTURE.md`, `docs/SECURITY.md`, and `docs/TESTING.md`.
 
 ---
@@ -151,6 +158,66 @@ Vault: personal.vault
 - To back up your vault, simply copy your `.vault` or `vault.dat` file to your backup storage (e.g., an external drive).
 - Never share your master password. Without the master password, an encrypted vault cannot be recovered.
 
+### 4.6 Example Terminal Session (Illustrative Demo)
+
+> [!NOTE]
+> The following session demonstrates typical CLI interaction using synthetic dummy credentials.
+
+```text
+========================================
+        NEW VAULT INITIALIZATION
+========================================
+No vault found at: vault.dat
+Create a strong master password to secure your local vault.
+
+Enter new master password: [hidden]
+Confirm master password: [hidden]
+[✓] Encrypted vault created and unlocked successfully.
+
+----------------------------------------
+        SECURE PASSWORD MANAGER
+Vault: vault.dat
+----------------------------------------
+ 1. Add a credential
+ 2. View all credentials
+ 3. Search credentials
+ 4. View credential details
+ 5. Edit a credential
+ 6. Delete a credential
+ 7. Generate a password
+ 8. Save vault
+ 9. Lock vault
+10. Exit
+----------------------------------------
+Enter choice (1-10): 1
+
+--- Add New Credential ---
+Service / Website (required): GitHub
+Username / Email (optional): alice@example.com
+Credential Password:
+[G] Generate strong password  |  [T] Type password manually: G
+Generated Password: 7k#P9$mQ2!vL8@wZ
+Use this password? [Y/n]: y
+Website URL (optional): https://github.com
+Category (optional): Developer
+Notes (optional): Example work token
+[✓] Credential added successfully (ID: 1).
+
+----------------------------------------
+        SECURE PASSWORD MANAGER
+Vault: vault.dat  [UNSAVED CHANGES]
+----------------------------------------
+Enter choice (1-10): 2
+
+--- All Vault Credentials ---
++------+------------------------+------------------------+------------------------+
+| ID   | Service                | Username               | Category               |
++------+------------------------+------------------------+------------------------+
+| 1    | GitHub                 | alice@example.com      | Developer              |
++------+------------------------+------------------------+------------------------+
+Total: 1 credential(s).
+```
+
 ---
 
 ## 5. Build and Test Instructions
@@ -162,17 +229,17 @@ Vault: personal.vault
 
 ### Build & Test Commands
 ```powershell
-# Configure presets
-cmake --preset debug
-cmake --preset release
+# Configure presets (MSVC C++20 via vcpkg manifest)
+cmake --preset windows-msvc-debug
+cmake --preset windows-msvc-release
 
 # Build executable and libraries
 cmake --build --preset debug
 cmake --build --preset release
 
-# Run automated test suites (120 tests)
-ctest --preset debug-test
-ctest --preset release-test
+# Run automated test suites (124 tests across 16 GoogleTest suites)
+ctest --preset debug-test --output-on-failure
+ctest --preset release-test --output-on-failure
 ```
 
 ---
@@ -191,7 +258,9 @@ Password Manager/
 ├── LICENSE                     # MIT License
 │
 ├── docs/                       # Architectural & design documentation
-│   └── SECURITY.md             # Cryptographic architecture, format spec & threat model
+│   ├── ARCHITECTURE.md         # Layered design & sequence diagrams
+│   ├── SECURITY.md             # Cryptographic architecture, format spec & threat model
+│   └── TESTING.md              # Test execution & suite breakdown
 │
 ├── include/                    # Public headers
 │   ├── cli/                    # Presentation and application orchestration

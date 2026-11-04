@@ -74,7 +74,7 @@ flowchart TD
   - XChaCha20-Poly1305-IETF authenticated encryption with 192-bit extended nonces.
   - Verification of 48-byte Additional Authenticated Data (AAD).
   - CSPRNG random generation for salts and nonces.
-- **`SecureKey`**: RAII wrapper encapsulating a 32-byte symmetric key inside `sodium_malloc`-guarded memory. Automatically scrubbed via `sodium_free` on destruction. Move-only semantics prevent accidental copies.
+- **`SecureKey`**: RAII wrapper encapsulating a 32-byte symmetric key inside an inline stack buffer (`std::array<unsigned char, 32>`). Automatically scrubbed via `sodium_memzero` on destruction and move. Move-only semantics prevent accidental copies.
 - **`SecureBuffer`**: Dynamic-length sensitive data container backed by `sodium_malloc` page-protected memory.
 - **`PasswordGenerator`**: Cryptographically secure password generation with configurable lengths, character sets, guaranteed category representation, and Fisher-Yates uniform shuffle.
 
