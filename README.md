@@ -260,6 +260,7 @@ Password Manager/
 ├── docs/                       # Architectural & design documentation
 │   ├── ARCHITECTURE.md         # Layered design & sequence diagrams
 │   ├── SECURITY.md             # Cryptographic architecture, format spec & threat model
+│   ├── BACKUP_AND_RECOVERY.md  # Manual encrypted vault backup and restore guidance
 │   └── TESTING.md              # Test execution & suite breakdown
 │
 ├── include/                    # Public headers
